@@ -22,7 +22,7 @@ THRESHOLDS = {
 
 SLICE_THICKNESS_ALLOWED = {0.75, 1.0, 1.25}
 SLICE_THICKNESS_STEP = 0.25
-ROW_ID_COLUMN_NAME = "na"  # CSV column that stores filename-based row identifiers.
+FILENAME_COLUMN = "na"  # CSV column that stores filename-based row identifiers.
 
 SWAPS = {
     "InstitutionName": [
@@ -142,9 +142,20 @@ def get_age_group(age_value):
 
 
 def round_slice_thickness(value):
+    raw_value = parse_float(value)
+    if raw_value is None:
+        return None
+    rounded = round(raw_value / SLICE_THICKNESS_STEP)
+    return round(rounded * SLICE_THICKNESS_STEP, 2)
+
+
+def parse_float(value):
     if value in ("", None):
         return None
-    return round(float(value) / SLICE_THICKNESS_STEP) * SLICE_THICKNESS_STEP
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def filtered_rows(rows):
@@ -162,8 +173,7 @@ def group_key(column, row):
     if column == "SliceThickness_round":
         return round_slice_thickness(row.get("SliceThickness"))
     if column == "KVP":
-        value = row.get("KVP")
-        return float(value) if value not in ("", None) else None
+        return parse_float(row.get("KVP"))
     return row.get(column)
 
 
@@ -182,11 +192,8 @@ def compute_failures(rows, column):
     for key, items in groups.items():
         metrics = {}
         for metric in METRIC_COLUMNS:
-            values = [
-                float(item[metric])
-                for item in items
-                if item.get(metric) not in ("", None)
-            ]
+            values = [parse_float(item.get(metric)) for item in items]
+            values = [value for value in values if value is not None]
             metrics[metric] = mean(values) if values else None
         for metric, threshold in THRESHOLDS.items():
             value = metrics.get(metric)
@@ -278,17 +285,23 @@ def main():
         fieldnames = reader.fieldnames or []
         rows = list(reader)
 
-    if ROW_ID_COLUMN_NAME not in fieldnames:
+    if FILENAME_COLUMN not in fieldnames:
         raise ValueError(
-            f"CSV must include '{ROW_ID_COLUMN_NAME}' column (row identifier/filename) for row mapping."
+            f"CSV must include '{FILENAME_COLUMN}' column (row identifier/filename) for row mapping."
         )
 
     index = {}
+    line_numbers = {}
     for idx, row in enumerate(rows):
-        row_id = row.get(ROW_ID_COLUMN_NAME)
+        row_id = row.get(FILENAME_COLUMN)
         if row_id in index:
-            raise ValueError(f"Duplicate row ID found: {row_id}")
+            line_number = idx + 2
+            first_line = line_numbers[row_id]
+            raise ValueError(
+                f"Duplicate row ID '{row_id}' found at lines {first_line} and {line_number}."
+            )
         index[row_id] = idx
+        line_numbers[row_id] = idx + 2
 
     filtered = filtered_rows(rows)
     if not filtered:
