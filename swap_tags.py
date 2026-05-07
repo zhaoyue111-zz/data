@@ -22,7 +22,7 @@ THRESHOLDS = {
 
 SLICE_THICKNESS_ALLOWED = {0.75, 1.0, 1.25}
 SLICE_THICKNESS_STEP = 0.25
-FILENAME_COLUMN = "na"  # CSV column that stores filename-based row identifiers.
+FILENAME_COLUMN = "na"  # CSV header holding filename-based row identifiers.
 
 SWAPS = {
     "InstitutionName": [
@@ -131,6 +131,7 @@ COLUMN_MAP = {
 
 
 def get_age_group(age_value):
+    """Extract numeric age and return a decade range like '30-39'."""
     if not age_value:
         return None
     digits = "".join(char for char in age_value if char.isdigit())
@@ -142,6 +143,7 @@ def get_age_group(age_value):
 
 
 def round_slice_thickness(value):
+    """Round slice thickness to the nearest SLICE_THICKNESS_STEP value."""
     raw_value = parse_float(value)
     if raw_value is None:
         return None
@@ -150,6 +152,7 @@ def round_slice_thickness(value):
 
 
 def parse_float(value):
+    """Parse a float safely, returning None for empty or invalid values."""
     if value in ("", None):
         return None
     try:
@@ -159,6 +162,7 @@ def parse_float(value):
 
 
 def filtered_rows(rows):
+    """Filter rows to test subset entries with label2 metrics present."""
     return [
         row
         for row in rows
@@ -168,6 +172,7 @@ def filtered_rows(rows):
 
 
 def group_key(column, row):
+    """Compute the grouping key for a row based on the requested column."""
     if column == "Age_group":
         return get_age_group(row.get("PatientAge"))
     if column == "SliceThickness_round":
