@@ -21,6 +21,7 @@ THRESHOLDS = {
 }
 
 SLICE_THICKNESS_ALLOWED = {0.75, 1.0, 1.25}
+ROW_ID_COLUMN = "na"
 
 SWAPS = {
     "InstitutionName": [
@@ -128,7 +129,7 @@ COLUMN_MAP = {
 }
 
 
-def age_group(age_value):
+def get_age_group(age_value):
     if not age_value:
         return None
     digits = "".join(char for char in age_value if char.isdigit())
@@ -139,7 +140,7 @@ def age_group(age_value):
     return f"{decade}-{decade + 9}"
 
 
-def slice_round(value):
+def round_slice_thickness(value):
     if value in ("", None):
         return None
     return round(float(value) * 4) / 4
@@ -156,9 +157,9 @@ def filtered_rows(rows):
 
 def group_key(column, row):
     if column == "Age_group":
-        return age_group(row.get("PatientAge"))
+        return get_age_group(row.get("PatientAge"))
     if column == "SliceThickness_round":
-        return slice_round(row.get("SliceThickness"))
+        return round_slice_thickness(row.get("SliceThickness"))
     if column == "KVP":
         value = row.get("KVP")
         return float(value) if value not in ("", None) else None
@@ -166,6 +167,7 @@ def group_key(column, row):
 
 
 def compute_failures(rows, column):
+    """Group rows by a column and return groups that fail any metric threshold."""
     groups = defaultdict(list)
     for row in rows:
         key = group_key(column, row)
@@ -210,6 +212,7 @@ def report_failures(column, failures, verbose=False):
 
 
 def apply_swap(rows, index, column, left_id, right_id):
+    """Swap metadata values between two rows identified by their row IDs."""
     left = index.get(left_id)
     right = index.get(right_id)
     if left is None or right is None:
@@ -234,6 +237,7 @@ def write_csv(path, rows, fieldnames):
 
 
 def parse_args():
+    """Parse command-line arguments for the tag swap script."""
     parser = argparse.ArgumentParser(
         description=(
             "Swap metadata tag values between specified CSV rows and validate that "
@@ -273,14 +277,14 @@ def main():
         fieldnames = reader.fieldnames or []
         rows = list(reader)
 
-    if "na" not in fieldnames:
+    if ROW_ID_COLUMN not in fieldnames:
         raise ValueError(
             "CSV must include 'na' column (row identifier/filename) for row mapping."
         )
 
     index = {}
     for idx, row in enumerate(rows):
-        row_id = row.get("na")
+        row_id = row.get(ROW_ID_COLUMN)
         if row_id in index:
             raise ValueError(f"Duplicate row id found: {row_id}")
         index[row_id] = idx
