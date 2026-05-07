@@ -21,7 +21,8 @@ THRESHOLDS = {
 }
 
 SLICE_THICKNESS_ALLOWED = {0.75, 1.0, 1.25}
-ROW_ID_COLUMN = "na"
+SLICE_THICKNESS_STEP = 0.25
+ROW_ID_COLUMN_NAME = "na"  # CSV column that stores filename-based row identifiers.
 
 SWAPS = {
     "InstitutionName": [
@@ -143,7 +144,7 @@ def get_age_group(age_value):
 def round_slice_thickness(value):
     if value in ("", None):
         return None
-    return round(float(value) * 4) / 4
+    return round(float(value) / SLICE_THICKNESS_STEP) * SLICE_THICKNESS_STEP
 
 
 def filtered_rows(rows):
@@ -277,16 +278,16 @@ def main():
         fieldnames = reader.fieldnames or []
         rows = list(reader)
 
-    if ROW_ID_COLUMN not in fieldnames:
+    if ROW_ID_COLUMN_NAME not in fieldnames:
         raise ValueError(
-            "CSV must include 'na' column (row identifier/filename) for row mapping."
+            f"CSV must include '{ROW_ID_COLUMN_NAME}' column (row identifier/filename) for row mapping."
         )
 
     index = {}
     for idx, row in enumerate(rows):
-        row_id = row.get(ROW_ID_COLUMN)
+        row_id = row.get(ROW_ID_COLUMN_NAME)
         if row_id in index:
-            raise ValueError(f"Duplicate row id found: {row_id}")
+            raise ValueError(f"Duplicate row ID found: {row_id}")
         index[row_id] = idx
 
     filtered = filtered_rows(rows)
