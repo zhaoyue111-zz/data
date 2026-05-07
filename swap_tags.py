@@ -213,7 +213,11 @@ def apply_swap(rows, index, column, left_id, right_id):
     left = index.get(left_id)
     right = index.get(right_id)
     if left is None or right is None:
-        missing = [item for item, value in ((left_id, left), (right_id, right)) if value is None]
+        missing = [
+            row_id
+            for row_id, value in ((left_id, left), (right_id, right))
+            if value is None
+        ]
         raise ValueError(f"Missing rows for swap in {column}: {', '.join(missing)}")
     target_column = COLUMN_MAP[column]
     rows[left][target_column], rows[right][target_column] = (
@@ -230,7 +234,12 @@ def write_csv(path, rows, fieldnames):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Apply tag swaps and verify metrics.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Swap metadata tag values between specified CSV rows and validate that "
+            "group-level performance metrics meet required thresholds."
+        )
+    )
     parser.add_argument(
         "--input",
         default="lymph_segment_eval_result3.csv",
@@ -265,7 +274,9 @@ def main():
         rows = list(reader)
 
     if "na" not in fieldnames:
-        raise ValueError("CSV must include 'na' column for row identification.")
+        raise ValueError(
+            "CSV must include 'na' column (row identifier/filename) for row mapping."
+        )
 
     index = {}
     for idx, row in enumerate(rows):
