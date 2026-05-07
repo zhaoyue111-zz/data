@@ -331,13 +331,16 @@ def parse_args():
         "--subset",
         choices=("test", "val", "all"),
         default="test",
-        help="Subset to validate against thresholds.",
+        help='Subset to validate against thresholds. Use "all" to validate both.',
     )
     parser.add_argument(
         "--swap-plan",
         choices=("test", "val", "all"),
         default="test",
-        help="Swap plan to apply (use 'val' for lymph_segment_eval_result3_swapped.csv).",
+        help=(
+            "Swap plan to apply. Use 'test' for the original CSV, 'val' when the "
+            "CSV already includes test swaps, or 'all' to apply both in order."
+        ),
     )
     return parser.parse_args()
 
@@ -378,7 +381,8 @@ def main():
         if not filtered:
             raise ValueError(
                 "No rows found with subset="
-                f"{subset} and non-empty label2_ge5mm_dice_lesion values."
+                f"{subset} and non-empty label2_ge5mm_dice_lesion values. "
+                "Please verify the input CSV contains data for this subset."
             )
         filtered_by_subset[subset] = filtered
 
