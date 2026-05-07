@@ -22,7 +22,7 @@ THRESHOLDS = {
 
 SLICE_THICKNESS_ALLOWED = {0.75, 1.0, 1.25}
 SLICE_THICKNESS_STEP = 0.25
-FILENAME_COLUMN = "na"  # CSV header holding filename-based row identifiers.
+ROW_ID_COLUMN = "na"  # CSV header named 'na' that stores filename-based row IDs.
 
 SWAPS = {
     "InstitutionName": [
@@ -290,27 +290,31 @@ def main():
         fieldnames = reader.fieldnames or []
         rows = list(reader)
 
-    if FILENAME_COLUMN not in fieldnames:
+    if ROW_ID_COLUMN not in fieldnames:
         raise ValueError(
-            f"CSV must include '{FILENAME_COLUMN}' column (row identifier/filename) for row mapping."
+            f"CSV must include column named '{ROW_ID_COLUMN}' (filename-based row ID)."
         )
 
     index = {}
     line_numbers = {}
     for idx, row in enumerate(rows):
-        row_id = row.get(FILENAME_COLUMN)
+        row_id = row.get(ROW_ID_COLUMN)
         if row_id in index:
             line_number = idx + 2
             first_line = line_numbers[row_id]
             raise ValueError(
-                f"Duplicate row ID '{row_id}' found at lines {first_line} and {line_number}."
+                f"Duplicate row ID '{row_id}' found at CSV lines {first_line} and "
+                f"{line_number} (including header)."
             )
         index[row_id] = idx
         line_numbers[row_id] = idx + 2
 
     filtered = filtered_rows(rows)
     if not filtered:
-        raise ValueError("No rows found for subset=test with label2 metrics.")
+        raise ValueError(
+            "No rows found with subset=test and non-empty "
+            "label2_ge5mm_dice_lesion values."
+        )
 
     for column, swaps in SWAPS.items():
         print(f"\nApplying swaps for {column}")
