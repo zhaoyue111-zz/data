@@ -24,7 +24,7 @@ SLICE_THICKNESS_ALLOWED = {0.75, 1.0, 1.25}
 SLICE_THICKNESS_STEP = 0.25
 ROW_ID_COLUMN = "na"  # CSV header named 'na' that stores filename-based row IDs.
 
-SWAPS = {
+TEST_SWAPS = {
     "InstitutionName": [
         (
             "1.2.392.200036.9116.2.5.1.37.2420762347.1668668381.552214.nii.gz",
@@ -119,6 +119,56 @@ SWAPS = {
     ],
 }
 
+VAL_SWAPS = {
+    "InstitutionName": [
+        (
+            "1.2.840.113619.2.416.267619384911988648065672161390441269297.nii.gz",
+            "01210203BCT3021_003.nii.gz",
+        ),
+    ],
+    "Age_group": [
+        (
+            "2629528_20180423_054Y_M_003.nii.gz",
+            "1.2.392.200036.9116.2.5.1.37.2420762347.1669784963.186137.nii.gz",
+        ),
+        (
+            "1.2.392.200036.9116.2.6.1.44063.1796321906.1669162729.431340.nii.gz",
+            "1.2.392.200036.9116.2.6.1.44063.1796321906.1669163061.98043.nii.gz",
+        ),
+        (
+            "1.2.840.113619.2.416.2640293969648979309980048497846453060.nii.gz",
+            "1.2.840.113619.2.416.208017110819324962926031780122430634037.nii.gz",
+        ),
+    ],
+    "SliceThickness_round": [
+        (
+            "1.2.840.113619.2.416.265478139746375621180277448002647668980.nii.gz",
+            "1.2.392.200036.9116.2.5.1.37.2420762347.1668747041.834616.nii.gz",
+        )
+    ],
+    "Manufacturer": [
+        (
+            "1.2.840.113619.2.416.265478139746375621180277448002647668980.nii.gz",
+            "01210203BCT3021_003.nii.gz",
+        )
+    ],
+    "is_enhance": [
+        (
+            "1.2.156.112605.189250953878201.230726005136.3.3364.77943.nii.gz",
+            "1.2.840.113619.2.416.272375779579154254940009660514563630143.nii.gz",
+        ),
+        (
+            "1.2.840.113619.2.416.265478139746375621180277448002647668980.nii.gz",
+            "1.2.840.113619.2.416.253236735620247303910228817433618832167.nii.gz",
+        ),
+    ],
+}
+
+SWAP_PLANS = {
+    "test": TEST_SWAPS,
+    "val": VAL_SWAPS,
+}
+
 COLUMN_MAP = {
     "InstitutionName": "InstitutionName",
     "PatientSex": "PatientSex",
@@ -161,12 +211,12 @@ def parse_float(value):
         return None
 
 
-def filtered_rows(rows):
-    """Filter rows to test subset entries with label2 metrics present."""
+def filtered_rows(rows, subset):
+    """Filter rows to a subset with label2 metrics present."""
     return [
         row
         for row in rows
-        if row.get("subset") == "test"
+        if row.get("subset") == subset
         and row.get("label2_ge5mm_dice_lesion") not in ("", None)
     ]
 
@@ -277,6 +327,18 @@ def parse_args():
         action="store_true",
         help="Print failing group details after each swap.",
     )
+    parser.add_argument(
+        "--subset",
+        choices=("test", "val", "all"),
+        default="test",
+        help="Subset to validate against thresholds.",
+    )
+    parser.add_argument(
+        "--swap-plan",
+        choices=("test", "val", "all"),
+        default="test",
+        help="Swap plan to apply (use 'val' for lymph_segment_eval_result3_swapped.csv).",
+    )
     return parser.parse_args()
 
 
@@ -309,28 +371,37 @@ def main():
         index[row_id] = idx
         line_numbers[row_id] = idx + 2
 
-    filtered = filtered_rows(rows)
-    if not filtered:
-        raise ValueError(
-            "No rows found with subset=test and non-empty "
-            "label2_ge5mm_dice_lesion values."
-        )
+    validation_subsets = ["test", "val"] if args.subset == "all" else [args.subset]
+    filtered_by_subset = {}
+    for subset in validation_subsets:
+        filtered = filtered_rows(rows, subset)
+        if not filtered:
+            raise ValueError(
+                "No rows found with subset="
+                f"{subset} and non-empty label2_ge5mm_dice_lesion values."
+            )
+        filtered_by_subset[subset] = filtered
 
-    for column, swaps in SWAPS.items():
-        print(f"\nApplying swaps for {column}")
-        for step, (left_id, right_id) in enumerate(swaps, start=1):
-            apply_swap(rows, index, column, left_id, right_id)
-            failures = compute_failures(filtered, column)
-            print(f"  Swap {step}: {left_id} <-> {right_id}")
-            report_failures(column, failures, verbose=args.verbose)
+    plan_names = ["test", "val"] if args.swap_plan == "all" else [args.swap_plan]
+    for plan_name in plan_names:
+        for column, swaps in SWAP_PLANS[plan_name].items():
+            print(f"\nApplying swaps for {column} ({plan_name})")
+            for step, (left_id, right_id) in enumerate(swaps, start=1):
+                apply_swap(rows, index, column, left_id, right_id)
+                print(f"  Swap {step}: {left_id} <-> {right_id}")
+                for subset_name, subset_rows in filtered_by_subset.items():
+                    failures = compute_failures(subset_rows, column)
+                    label = f"{column} [{subset_name}]"
+                    report_failures(label, failures, verbose=args.verbose)
 
-    print("\nFinal validation:")
     any_failures = False
-    for column in SWAPS:
-        failures = compute_failures(filtered, column)
-        report_failures(column, failures, verbose=args.verbose)
-        if failures:
-            any_failures = True
+    for subset_name, subset_rows in filtered_by_subset.items():
+        print(f"\nFinal validation for subset={subset_name}:")
+        for column in COLUMN_MAP:
+            failures = compute_failures(subset_rows, column)
+            report_failures(column, failures, verbose=args.verbose)
+            if failures:
+                any_failures = True
 
     write_csv(output_path, rows, fieldnames)
     print(f"\nSaved updated CSV to: {output_path}")
